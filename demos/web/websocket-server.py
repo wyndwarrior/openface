@@ -107,6 +107,7 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
     def onMessage(self, payload, isBinary):
         raw = payload.decode('utf8')
         msg = json.loads(raw)
+        self.trainSVM()
         print("Received {} message of length {}.".format(
             msg['type'], len(raw)))
         if msg['type'] == "ALL_STATE":
@@ -222,7 +223,11 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
         self.sendMessage(json.dumps(msg))
 
     def trainSVM(self):
+        import cPickle as pickle
         print("+ Training SVM on {} labeled images.".format(len(self.images)))
+        with open('classify-test/features/classifier.pkl', 'rb') as svmfile:
+            self.labelenc, self.svm = pickle.load(svmfile)
+        return
         d = self.getData()
         if d is None:
             self.svm = None
@@ -298,11 +303,7 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                     }
                     self.sendMessage(json.dumps(msg))
                 else:
-                    if len(self.people) == 0:
-                        identity = -1
-                    elif len(self.people) == 1:
-                        identity = 0
-                    elif self.svm:
+                    if self.svm:
                         identity = self.svm.predict(rep)[0]
                     else:
                         print("hhh")
@@ -319,12 +320,9 @@ class OpenFaceServerProtocol(WebSocketServerProtocol):
                     cv2.circle(annotatedFrame, center=landmarks[p], radius=3,
                                color=(102, 204, 255), thickness=-1)
                 if identity == -1:
-                    if len(self.people) == 1:
-                        name = self.people[0]
-                    else:
-                        name = "Unknown"
+                    name = "Unknown"
                 else:
-                    name = self.people[identity]
+                    name = self.labelenc.inverse_transform([identity])[0]
                 cv2.putText(annotatedFrame, name, (bb.left(), bb.top() - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.75,
                             color=(152, 255, 204), thickness=2)
